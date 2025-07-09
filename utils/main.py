@@ -188,7 +188,7 @@ def main_jsonl(jsonl_path, output_path):
 if __name__ == '__main__':
     # main_single("./test_hex_float.c")
     
-    main()
+    # main()
 
-    # main_jsonl('view.jsonl', 'all_blocks.json')
+    main_jsonl('view.jsonl', 'all_blocks.json')
     # main_jsonl('view.jsonl', 'all_blocks.json')

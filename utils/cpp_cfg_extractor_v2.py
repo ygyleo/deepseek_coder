@@ -41,7 +41,7 @@ class CppCfgExtractorV2:
                     return False
                 return True
 
-            def split_blocks_cpp(node, blocks):
+            def process_compound_statement(node, blocks):
                 if node.type != 'compound_statement':
                     return
                 children = node.children
@@ -54,23 +54,34 @@ class CppCfgExtractorV2:
                         continue
                     if is_block_node(child):
                         blocks.append(child.start_point[0] + 1)
-                        # 递归处理所有子节点
                         for c in child.children:
                             if c.type == 'compound_statement':
-                                split_blocks_cpp(c, blocks)
-                            elif is_meaningful_statement(c):
-                                blocks.append(c.start_point[0] + 1)
-                            elif is_block_node(c):
-                                blocks.append(c.start_point[0] + 1)
-                                for cc in c.children:
-                                    if cc.type == 'compound_statement':
-                                        split_blocks_cpp(cc, blocks)
+                                process_compound_statement(c, blocks)
+                            else:
+                                process_node_recursively(c, blocks)
                         i += 1
                     else:
-                        # 每个有意义的语句都单独分块
-                        if is_meaningful_statement(child):
-                            blocks.append(child.start_point[0] + 1)
-                        i += 1
+                        # 连续顺序语句合并为一个块，只保留首行号
+                        seq_start = i
+                        while i < n and not is_block_node(children[i]) and is_meaningful_statement(children[i]) and children[i].type not in ('{', '}'):
+                            i += 1
+                        if seq_start < i:
+                            blocks.append(children[seq_start].start_point[0] + 1)
+                        if i == seq_start:
+                            i += 1
+
+            def process_node_recursively(node, blocks):
+                if node.type == 'compound_statement':
+                    process_compound_statement(node, blocks)
+                elif is_block_node(node):
+                    blocks.append(node.start_point[0] + 1)
+                    for child in node.children:
+                        process_node_recursively(child, blocks)
+                elif is_meaningful_statement(node):
+                    blocks.append(node.start_point[0] + 1)
+                else:
+                    for child in node.children:
+                        process_node_recursively(child, blocks)
 
             # 入口：只处理函数体
             tree = parser.parse(bytes(code_str, 'utf8'))
@@ -80,7 +91,7 @@ class CppCfgExtractorV2:
                 if node.type == 'function_definition':
                     for child in node.children:
                         if child.type == 'compound_statement':
-                            split_blocks_cpp(child, result)
+                            process_compound_statement(child, result)
             unique_lines = sorted(set(result))
             return {
                 "name": name,
