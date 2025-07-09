@@ -4,7 +4,7 @@ from tree_sitter import Language, Parser
 import graph_gen
 
 # 使用 tree-sitter-cpp 包
-CPP_LANGUAGE = Language('../build/my-languages.so', 'cpp')
+CPP_LANGUAGE = Language('/home/featurize/work/deepseek_coder/utils/build/my-languages.so', 'cpp')
 parser = Parser()
 parser.set_language(CPP_LANGUAGE)
 
