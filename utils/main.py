@@ -124,73 +124,13 @@ def analyze_code_by_filetype(code_str, name, file_path):
         cpp_extractor = CppCfgExtractorV2()
         return cpp_extractor.analyze_cpp_code(code_str, name)
     else:
-        # C代码，走graph_gen方案
-        try:
-            # 预处理：移除所有 #include 语句，并添加必要的函数声明
-            lines = code_str.split('\n')
-            filtered_lines = []
-            for line in lines:
-                stripped = line.strip()
-                if not stripped.startswith('#include'):
-                    filtered_lines.append(line)
-            
-            # 添加必要的函数声明
-            function_declarations = """
-// 添加必要的函数声明
-void* malloc(size_t size);
-void free(void* ptr);
-void* realloc(void* ptr, size_t size);
-size_t strlen(const char* str);
-char* strcpy(char* dest, const char* src);
-char* strcat(char* dest, const char* src);
-int strcmp(const char* str1, const char* str2);
-char* strchr(const char* str, int c);
-void* memcpy(void* dest, const void* src, size_t n);
-int printf(const char* format, ...);
-int scanf(const char* format, ...);
-int isspace(int c);
-int isalpha(int c);
-"""
-            
-            processed_code = function_declarations + '\n'.join(filtered_lines)
-            
-            os.makedirs('tmp', exist_ok=True)
-            with open('tmp/c_processfile.c', 'w', encoding='utf-8') as f:
-                f.write(processed_code)
-            ast = parse_file(
-                'tmp/c_processfile.c',
-                use_cpp=True,
-                cpp_path='/usr/bin/cpp',
-                cpp_args='-I utils/fake_libc_include'
-            )
-            graph = graph_gen.Graph(ast, name)
-            all_nodes = []
-            def collect_all(node):
-                all_nodes.append(node)
-                for child in node.child:
-                    collect_all(child)
-            if graph.g is None:
-                return {"name": name, "split_lines": [], "error": "empty graph"}
-            for node in graph.g:
-                collect_all(node)
-            all_linenos = []
-            seen = set()
-            for n in all_nodes:
-                if n.id not in seen:
-                    seen.add(n.id)
-                    if n.linenos:
-                        all_linenos.extend(n.linenos)
-            unique_linenos = sorted(list(set(all_linenos)))
-            return {
-                "name": name,
-                "split_lines": unique_linenos
-            }
-        except Exception as e:
-            return {"name": name, "split_lines": [], "error": str(e)}
+        # C代码，也走tree-sitter方案（tree-sitter-cpp可以解析C代码）
+        cpp_extractor = CppCfgExtractorV2()
+        return cpp_extractor.analyze_cpp_code(code_str, name)
 
 def main():
     input_dir = '../datasets/ghidra_output'
-    output_path = 'all_blocks.json'
+    output_path = 'all_blocks_ghidra.json'
     results = []
     exts = {'.c', '.cpp', '.cc', '.cxx', '.h', '.hpp', '.hxx', '.c++', '.h++'}
     for file in os.listdir(input_dir):
@@ -248,7 +188,7 @@ def main_jsonl(jsonl_path, output_path):
 if __name__ == '__main__':
     # main_single("./test_hex_float.c")
     
-    # main()
+    main()
 
     # main_jsonl('view.jsonl', 'all_blocks.json')
-    main_jsonl('view.jsonl', 'all_blocks.json')
+    # main_jsonl('view.jsonl', 'all_blocks.json')
