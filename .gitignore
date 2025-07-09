@@ -2,7 +2,9 @@
 
 datasets/
 model_ckpt/
-data-00000-of-00017.jsonl
+
+# 忽略特定数据文件
+data-00000-of-00017.arrow
 data-00000-of-00017.jsonl
 
 # Python 缓存和临时文件
