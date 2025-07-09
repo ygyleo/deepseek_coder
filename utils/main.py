@@ -119,14 +119,14 @@ def analyze_c_file(c_path, output_path):
 
 def analyze_code_by_filetype(code_str, name, file_path):
     ext = os.path.splitext(file_path)[1].lower()
+    cpp_extractor = CppCfgExtractorV2()
+    
     if ext in CPP_EXTS:
         # C++ 代码，走tree-sitter方案
-        cpp_extractor = CppCfgExtractorV2()
         return cpp_extractor.analyze_cpp_code(code_str, name)
     else:
-        # C代码，也走tree-sitter方案（tree-sitter-cpp可以解析C代码）
-        cpp_extractor = CppCfgExtractorV2()
-        return cpp_extractor.analyze_cpp_code(code_str, name)
+        # C代码，也走tree-sitter方案，但使用专门的C处理函数
+        return cpp_extractor.analyze_c_code(code_str, name)
 
 def main():
     input_dir = '../datasets/ghidra_output'

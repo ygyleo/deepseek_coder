@@ -18,14 +18,15 @@ class CppCfgExtractorV2:
     """C++ CFG提取器，基于 tree-sitter 语法树分析"""
     def __init__(self):
         pass
-
+    
     def analyze_cpp_code(self, code_str: str, name: str = "code") -> Dict:
+        """处理 C++ 代码"""
         try:
             # CFG分块节点类型
             BLOCK_NODE_TYPES = {
                 'if_statement', 'while_statement', 'for_statement', 'switch_statement',
                 'case_statement', 'return_statement', 'break_statement', 'continue_statement',
-                'compound_statement', 'do_statement', 'else_clause'
+                'compound_statement', 'do_statement', 'else_clause', 'do_while_statement'
             }
 
             def is_block_node(node):
@@ -40,7 +41,81 @@ class CppCfgExtractorV2:
                     return False
                 return True
 
-            def split_blocks(node, blocks):
+            def split_blocks_cpp(node, blocks):
+                if node.type != 'compound_statement':
+                    return
+                children = node.children
+                n = len(children)
+                i = 0
+                while i < n:
+                    child = children[i]
+                    if child.type == '{' or child.type == '}':
+                        i += 1
+                        continue
+                    if is_block_node(child):
+                        blocks.append(child.start_point[0] + 1)
+                        # 递归处理所有子节点
+                        for c in child.children:
+                            if c.type == 'compound_statement':
+                                split_blocks_cpp(c, blocks)
+                            elif is_meaningful_statement(c):
+                                blocks.append(c.start_point[0] + 1)
+                            elif is_block_node(c):
+                                blocks.append(c.start_point[0] + 1)
+                                for cc in c.children:
+                                    if cc.type == 'compound_statement':
+                                        split_blocks_cpp(cc, blocks)
+                        i += 1
+                    else:
+                        # 每个有意义的语句都单独分块
+                        if is_meaningful_statement(child):
+                            blocks.append(child.start_point[0] + 1)
+                        i += 1
+
+            # 入口：只处理函数体
+            tree = parser.parse(bytes(code_str, 'utf8'))
+            root = tree.root_node
+            result = []
+            for node in root.children:
+                if node.type == 'function_definition':
+                    for child in node.children:
+                        if child.type == 'compound_statement':
+                            split_blocks_cpp(child, result)
+            unique_lines = sorted(set(result))
+            return {
+                "name": name,
+                "split_lines": unique_lines
+            }
+        except Exception as e:
+            return {
+                "name": name,
+                "split_lines": [],
+                "error": f"tree-sitter analysis failed: {str(e)}"
+            }
+
+    def analyze_c_code(self, code_str: str, name: str = "code") -> Dict:
+        """处理 C 代码"""
+        try:
+            # CFG分块节点类型
+            BLOCK_NODE_TYPES = {
+                'if_statement', 'while_statement', 'for_statement', 'switch_statement',
+                'case_statement', 'return_statement', 'break_statement', 'continue_statement',
+                'compound_statement', 'do_statement', 'else_clause', 'do_while_statement'
+            }
+
+            def is_block_node(node):
+                return node.type in BLOCK_NODE_TYPES
+
+            def is_meaningful_statement(node):
+                # 跳过大括号、空节点、注释、预处理、分号等
+                if node.type in (';', '{', '}', 'comment', 'preproc_call', 'preproc_def', 'preproc_if', 'preproc_elif', 'preproc_else', 'preproc_end', 'preproc_include'):
+                    return False
+                # 跳过空白节点
+                if not hasattr(node, 'start_point'):
+                    return False
+                return True
+
+            def process_compound_statement(node, blocks):
                 if node.type != 'compound_statement':
                     return
                 children = node.children
@@ -55,23 +130,32 @@ class CppCfgExtractorV2:
                         blocks.append(child.start_point[0] + 1)
                         for c in child.children:
                             if c.type == 'compound_statement':
-                                split_blocks(c, blocks)
-                            elif is_block_node(c):
-                                blocks.append(c.start_point[0] + 1)
-                                for cc in c.children:
-                                    if cc.type == 'compound_statement':
-                                        split_blocks(cc, blocks)
+                                process_compound_statement(c, blocks)
+                            else:
+                                process_node_recursively(c, blocks)
                         i += 1
                     else:
-                        # 连续顺序语句合并为一个块，遇到控制流或块结束才新开
+                        # 连续顺序语句合并为一个块，只保留首行号
                         seq_start = i
                         while i < n and not is_block_node(children[i]) and is_meaningful_statement(children[i]) and children[i].type not in ('{', '}'):
                             i += 1
                         if seq_start < i:
                             blocks.append(children[seq_start].start_point[0] + 1)
-                        # 如果下一个不是顺序语句，继续循环
                         if i == seq_start:
                             i += 1
+
+            def process_node_recursively(node, blocks):
+                if node.type == 'compound_statement':
+                    process_compound_statement(node, blocks)
+                elif is_block_node(node):
+                    blocks.append(node.start_point[0] + 1)
+                    for child in node.children:
+                        process_node_recursively(child, blocks)
+                elif is_meaningful_statement(node):
+                    blocks.append(node.start_point[0] + 1)
+                else:
+                    for child in node.children:
+                        process_node_recursively(child, blocks)
 
             # 入口：只处理函数体
             tree = parser.parse(bytes(code_str, 'utf8'))
@@ -81,7 +165,7 @@ class CppCfgExtractorV2:
                 if node.type == 'function_definition':
                     for child in node.children:
                         if child.type == 'compound_statement':
-                            split_blocks(child, result)
+                            process_compound_statement(child, result)
             unique_lines = sorted(set(result))
             return {
                 "name": name,
@@ -93,7 +177,7 @@ class CppCfgExtractorV2:
                 "split_lines": [],
                 "error": f"tree-sitter analysis failed: {str(e)}"
             }
-
+    
     def _analyze_as_c_code(self, code_str: str, name: str) -> Dict:
         # 兼容接口，直接用 graph_gen 处理
         try:
@@ -119,7 +203,7 @@ class CppCfgExtractorV2:
                 "split_lines": [],
                 "error": f"C analysis failed: {str(e)}"
             }
-
+    
     def _extract_line_numbers_from_graph(self, graph: graph_gen.Graph) -> List[int]:
         all_nodes = []
         def collect_all(node):
@@ -137,4 +221,4 @@ class CppCfgExtractorV2:
                 seen.add(n.id)
                 if n.linenos:
                     all_linenos.extend(n.linenos)
-        return sorted(list(set(all_linenos))) 
+        return sorted(list(set(all_linenos)))
