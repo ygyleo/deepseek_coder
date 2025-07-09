@@ -1,0 +1,27 @@
+# 忽略数据集和模型文件
+
+datasets/
+model_ckpt/
+data-00000-of-00017.jsonl
+data-00000-of-00017.jsonl
+
+# Python 缓存和临时文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.swp
+*.swo
+*.tmp
+*.log
+*.bak
+
+# Jupyter Notebook 检查点
+.ipynb_checkpoints/
+
+# VSCode 配置
+.vscode/
+
+# 其他常见忽略
+.DS_Store
+.env 
